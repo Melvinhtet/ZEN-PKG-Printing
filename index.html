@@ -58,7 +58,7 @@
   header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
   .eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 
-  .switch { display: inline-flex; padding: 6px; border-radius: 18px; box-shadow: var(--press); background: var(--bg); gap: 4px; }
+  .switch { display: inline-flex; flex-wrap: wrap; padding: 6px; border-radius: 18px; box-shadow: var(--press); background: var(--bg); gap: 4px; }
   .switch button {
     border: 0; background: transparent; color: var(--muted); font: 700 .9rem var(--font-ui);
     padding: 12px 22px; border-radius: 13px; cursor: pointer; transition: all .18s;
@@ -142,6 +142,7 @@
     <div class="switch" role="group" aria-label="Label type">
       <button id="typeTrade" aria-pressed="true"><span class="dot"></span>Trade packing</button>
       <button id="typeBulk" aria-pressed="false"><span class="dot"></span>Bulk packing</button>
+      <button id="typeHost" aria-pressed="false"><span class="dot"></span>Host packing</button>
     </div>
   </header>
 
@@ -191,14 +192,9 @@
               </select>
             </div>
             <div class="field">
-              <label for="site">Site prefix (DataMatrix)</label>
-              <input id="site" type="text" value="S60" maxlength="6" autocomplete="off">
-            </div>
-          </div>
-          <div class="row2">
-            <div class="field">
-              <label for="wyears">Warranty (years)</label>
-              <input id="wyears" type="number" min="0" max="10" step="1" value="2">
+              <label for="wmonths">Warranty (months)</label>
+              <input id="wmonths" type="number" min="0" max="120" step="1" value="24" inputmode="numeric">
+              <div class="hint" id="wHint"></div>
             </div>
           </div>
           <div class="field" data-type="trade">
@@ -241,10 +237,10 @@
   // ---------- Element handles ----------
   const $ = id => document.getElementById(id);
   const el = {
-    pn: $('pn'), qty: $('qty'), itf: $('itf'), sel: $('sel'), ts: $('ts'), country: $('country'), site: $('site'),
-    wyears: $('wyears'), logo: $('logo'), canvas: $('label'), spec: $('spec'), toast: $('toast'),
+    pn: $('pn'), qty: $('qty'), itf: $('itf'), sel: $('sel'), ts: $('ts'), country: $('country'),
+    wmonths: $('wmonths'), wHint: $('wHint'), logo: $('logo'), canvas: $('label'), spec: $('spec'), toast: $('toast'),
     pnHint: $('pnHint'), qtyHint: $('qtyHint'), itfHint: $('itfHint'), selHint: $('selHint'), subtitle: $('subtitle'),
-    stage: $('stage'), bgWhite: $('bgWhite'), bgKraft: $('bgKraft'), typeTrade: $('typeTrade'), typeBulk: $('typeBulk'),
+    stage: $('stage'), bgWhite: $('bgWhite'), bgKraft: $('bgKraft'), typeTrade: $('typeTrade'), typeBulk: $('typeBulk'), typeHost: $('typeHost'),
     btnDownload: $('btnDownload'), btnCopy: $('btnCopy'),
   };
   const ctx = el.canvas.getContext('2d');
@@ -252,10 +248,12 @@
   const SERIF = '"Times New Roman", Times, serif';
   const SANS  = 'Arial, Helvetica, sans-serif';
 
-  // Label types: canvas size at 300 DPI and the line code each one prints by default
+  // Label types: canvas size at 300 DPI, the site prefix encoded in DataMatrix / 1T,
+  // and the product-number rule each type enforces
   const TYPES = {
-    trade: { w: 2400, h: 1200, size: '8 × 4 in' },
-    bulk:  { w: 1800, h: 1350, size: '6 × 4.5 in' },
+    trade: { name: 'Trade', w: 2400, h: 1200, size: '8 × 4 in',   site: 'S60', pnRe: /^[A-Z0-9#\-]+$/,            pnMsg: 'Use letters, digits, # or - only',           example: 'L0S66AA#JPN', ph: 'e.g. L0S66AA#JPN' },
+    bulk:  { name: 'Bulk',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'S60', pnRe: /^[A-Z0-9]{5}-[A-Z0-9]{5}$/, pnMsg: 'Bulk format: XXXXX-XXXXX (e.g. 4S6W2-60001)', example: '4S6W2-60001', ph: 'XXXXX-XXXXX (e.g. 4S6W2-60001)' },
+    host:  { name: 'Host',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'K80', pnRe: /^[A-Z0-9]{4}-[A-Z0-9]{4}$/, pnMsg: 'Host format: XXXX-XXXX (e.g. 5060-8897)',     example: '5060-8897',   ph: 'XXXX-XXXX (e.g. 5060-8897)' },
   };
   let type = 'trade';
   let logoImg = null;
@@ -280,8 +278,7 @@
     const errors = {};
     const pn = el.pn.value.trim().toUpperCase();
     if (!pn) errors.pn = 'Product number is required';
-    else if (type === 'bulk' && !/^[A-Z0-9]{5}-[A-Z0-9]{5}$/.test(pn)) errors.pn = 'Bulk format: XXXXX-XXXXX (e.g. 4S6W2-60001)';
-    else if (!/^[A-Z0-9#\-]+$/.test(pn)) errors.pn = 'Use letters, digits, # or - only';
+    else if (!TYPES[type].pnRe.test(pn)) errors.pn = TYPES[type].pnMsg;
 
     const qty = parseInt(el.qty.value, 10);
     if (!Number.isInteger(qty) || qty < 1) errors.qty = 'Quantity must be a whole number ≥ 1';
@@ -317,9 +314,9 @@
 
     const country = el.country.value;
     const countryName = el.country.selectedOptions[0].dataset.name;
-    const site = (el.site.value.trim().toUpperCase() || 'S60');
-    const wy = Math.max(0, parseInt(el.wyears.value, 10) || 0);
-    const wEnd = new Date(d.getFullYear() + wy, d.getMonth(), 1);
+    const site = TYPES[type].site;
+    const wm = Math.max(0, parseInt(el.wmonths.value, 10) || 0);
+    const wEnd = new Date(d.getFullYear(), d.getMonth() + wm, 1);   // JS rolls extra months into the year
     const wMon = MONTHS[wEnd.getMonth()], wYear = wEnd.getFullYear();
 
     // Option code = everything after '#'. Only printed when '#' exists.
@@ -330,12 +327,12 @@
     return {
       ok: Object.keys(errors).length === 0, errors,
       data: {
-        pn, qty, itf, itfAdded, sel, selNums, hasOption, option, country, countryName, site, prefix,
+        pn, qty, itf, itfAdded, sel, selNums, hasOption, option, country, countryName, site, prefix, wm,
         dateText: `${yy}/${mm}/${dd}`, timeText: `${hh}:${mi}`, stamp,
         warrantyText: `${wMon} ${wYear}`,
         warrantyCodeTrade: `7D${pad2(wEnd.getMonth()+1)}${String(wYear).slice(-2)}`,   // 7D1028
-        warrantyCodeBulk: `15D${pad2(wEnd.getMonth()+1)}${wYear}`,                    // 15D012027
-        traceId: `1T${prefix}00${stamp}`,                                              // 1TMYS6000250117113833
+        warrantyCodeBulk: `15D${pad2(wEnd.getMonth()+1)}${wYear}`,                    // 15D012027 (bulk + host)
+        traceId: `1T${prefix}00${stamp}`,                                              // 1TMYS6000250117113833 / 1TMYK8000260617155551
         dm: type === 'trade'
           ? `${prefix}${stamp};${pn};${qty};${wMon}${wYear};${country}`
           : `${prefix}${stamp};${pn};${qty};${wMon} ${wYear};${country}`,
@@ -415,7 +412,7 @@
     ];
   }
 
-  // ---------- Bulk packing layout (mirrors the white sticker) ----------
+  // ---------- Bulk / Host packing layout (mirrors the white sticker; host has no selectivity number) ----------
   function renderBulk(data) {
     const cap = `700 40px ${SANS}`, hri = `400 30px ${SANS}`;
     const L = 90;                                   // left margin
@@ -435,12 +432,14 @@
     // (1T) Traceability ID with selectivity number at its right
     const r1 = 390;
     const t = drawLinear(L, r1, 1150, { caption: '(1T) TRACEABILITY ID', text: data.traceId, font: cap, hriFont: hri, height: 16 });
-    // Selectivity numbers: three per line so a long list wraps instead of running off the label
-    ctx.font = `700 54px ${SANS}`; ctx.textAlign = 'left'; ctx.fillStyle = '#000';
-    const lines = [];
-    for (let i = 0; i < data.selNums.length; i += 3) lines.push((i === 0 ? 'HP ' : '') + data.selNums.slice(i, i + 3).join('/'));
-    const y0 = r1 + 110 - (lines.length - 1) * 31;
-    lines.forEach((ln, i) => ctx.fillText(ln, t.right + 60, y0 + i * 62));
+    // Selectivity numbers (bulk only): three per line so a long list wraps instead of running off the label
+    if (type === 'bulk') {
+      ctx.font = `700 54px ${SANS}`; ctx.textAlign = 'left'; ctx.fillStyle = '#000';
+      const lines = [];
+      for (let i = 0; i < data.selNums.length; i += 3) lines.push((i === 0 ? 'HP ' : '') + data.selNums.slice(i, i + 3).join('/'));
+      const y0 = r1 + 110 - (lines.length - 1) * 31;
+      lines.forEach((ln, i) => ctx.fillText(ln, t.right + 60, y0 + i * 62));
+    }
 
     // (1P) Part number · (Q) Quantity (Code 39, shown with its *start/stop* in the HRI) + big quantity
     const r2 = 720;
@@ -455,7 +454,8 @@
     drawLinear(1050, r3, 520, { caption: 'MADE IN ' + data.countryName, text: '4L' + data.country, font: cap, hriFont: hri, height: 16 });
 
     return [
-      ['1T', data.traceId], ['Selectivity', data.sel], ['1P', '1P' + data.pn], ['Q (Code 39)', 'Q' + data.qty],
+      ['1T', data.traceId], ...(type === 'bulk' ? [['Selectivity', data.sel]] : []),
+      ['1P', '1P' + data.pn], ['Q (Code 39)', 'Q' + data.qty],
       ['15D', data.warrantyCodeBulk], ['4L', '4L' + data.country], ['Data Matrix', data.dm],
     ];
   }
@@ -467,6 +467,7 @@
     showHint(el.qtyHint, errors.qty || '', errors.qty ? 'err' : '');
     showHint(el.itfHint, errors.itf || (data.itfAdded ? `Check digit added → ${data.itf}` : 'Check digit OK'), errors.itf ? 'err' : 'ok');
     showHint(el.selHint, errors.sel || (type === 'bulk' ? `Printed as ${data.sel}` : ''), errors.sel ? 'err' : 'ok');
+    showHint(el.wHint, `Ends ${data.warrantyText} (${data.wm} months)`, 'ok');
     el.btnDownload.disabled = el.btnCopy.disabled = !ok;
 
     const W = el.canvas.width, H = el.canvas.height;
@@ -484,26 +485,26 @@
   // ---------- Label type switch ----------
   function setType(next) {
     type = next;
-    el.typeTrade.setAttribute('aria-pressed', String(next === 'trade'));
-    el.typeBulk.setAttribute('aria-pressed', String(next === 'bulk'));
+    for (const k of ['trade', 'bulk', 'host']) el['type' + k[0].toUpperCase() + k.slice(1)].setAttribute('aria-pressed', String(next === k));
     document.querySelectorAll('[data-type]').forEach(n => n.classList.toggle('hidden-type', n.dataset.type !== next));
-    el.canvas.width = TYPES[next].w; el.canvas.height = TYPES[next].h;
-    el.pn.placeholder = next === 'bulk' ? 'XXXXX-XXXXX (e.g. 4S6W2-60001)' : 'e.g. L0S66AA#JPN';
-    // Swap the example value when the current one doesn't fit the new format
-    if (next === 'bulk' && !/^[A-Z0-9]{5}-[A-Z0-9]{5}$/i.test(el.pn.value)) el.pn.value = '4S6W2-60001';
-    if (next === 'trade' && /^[A-Z0-9]{5}-[A-Z0-9]{5}$/i.test(el.pn.value)) el.pn.value = 'L0S66AA#JPN';
-    el.subtitle.textContent = `${next === 'trade' ? 'Trade' : 'Bulk'} packing · exports at 300 DPI (${TYPES[next].size})`;
+    const T = TYPES[next];
+    el.canvas.width = T.w; el.canvas.height = T.h;
+    el.pn.placeholder = T.ph;
+    // Swap in the example value when the current one doesn't fit the new format
+    if (!T.pnRe.test(el.pn.value.trim().toUpperCase())) el.pn.value = T.example;
+    el.subtitle.textContent = `${T.name} packing · exports at 300 DPI (${T.size})`;
     render();
   }
   el.typeTrade.addEventListener('click', () => setType('trade'));
   el.typeBulk.addEventListener('click', () => setType('bulk'));
+  el.typeHost.addEventListener('click', () => setType('host'));
 
   // ---------- Export ----------
   function toast(msg) { el.toast.textContent = msg; setTimeout(() => { if (el.toast.textContent === msg) el.toast.textContent = ''; }, 3500); }
 
   function fileName() {
     const { data } = readInputs();
-    return `${type === 'trade' ? 'Trade' : 'Bulk'}Carton_${data.pn.replace('#', '-')}_Q${data.qty}_${data.stamp}.png`;
+    return `${TYPES[type].name}Carton_${data.pn.replace('#', '-')}_Q${data.qty}_${data.stamp}.png`;
   }
 
   el.btnDownload.addEventListener('click', () => {
@@ -544,7 +545,7 @@
 
   // Live update
   let t;
-  for (const n of [el.pn, el.qty, el.itf, el.sel, el.ts, el.country, el.site, el.wyears]) {
+  for (const n of [el.pn, el.qty, el.itf, el.sel, el.ts, el.country, el.wmonths]) {
     n.addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 120); });
   }
 
