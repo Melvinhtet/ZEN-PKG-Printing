@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Master Carton Label</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Neumorphic UI: one soft grey-blue surface, elements are either raised (double shadow)
+     or pressed in (inset double shadow). Single orange accent for the active state. */
+  :root {
+    --bg: #e6ebf3;
+    --fg: #1d2433;
+    --muted: #7b8597;
+    --shadow-dark: #c4cbd8;
+    --shadow-light: #ffffff;
+    --accent: #ff6b3d;
+    --accent-deep: #e5522a;
+    --accent-fg: #ffffff;
+    --ok: #2aa36a;
+    --err: #d94a3c;
+    --kraft: #c9a97c;
+    --raise: 10px 10px 22px var(--shadow-dark), -10px -10px 22px var(--shadow-light);
+    --raise-sm: 5px 5px 12px var(--shadow-dark), -5px -5px 12px var(--shadow-light);
+    --press: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
+    --press-sm: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    --font-ui: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #252a33; --fg: #e9edf5; --muted: #929cb0;
+      --shadow-dark: #1a1e25; --shadow-light: #30363f;
+      --accent: #ff7a4d; --accent-deep: #e8572e; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #252a33; --fg: #e9edf5; --muted: #929cb0;
+    --shadow-dark: #1a1e25; --shadow-light: #30363f;
+    --accent: #ff7a4d; --accent-deep: #e8572e; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--font-ui); color: var(--fg); background: var(--bg); min-height: 100vh;
+    padding-block: 30px 44px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .app { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+
+  /* Header + label-type switch */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+  .eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+  .switch { display: inline-flex; padding: 6px; border-radius: 18px; box-shadow: var(--press); background: var(--bg); gap: 4px; }
+  .switch button {
+    border: 0; background: transparent; color: var(--muted); font: 700 .9rem var(--font-ui);
+    padding: 12px 22px; border-radius: 13px; cursor: pointer; transition: all .18s;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .switch button .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--shadow-dark); box-shadow: var(--press-sm); }
+  .switch button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--raise-sm); }
+  .switch button[aria-pressed="true"] .dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 2px 6px rgba(0,0,0,.25); }
+
+  .grid { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 26px; align-items: start; }
+  @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--bg); border-radius: 26px; box-shadow: var(--raise); padding: 26px; min-width: 0; }
+  .card h2 { margin: 0 0 16px; font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+  .fields { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field label { font-size: .85rem; font-weight: 700; padding-left: 4px; }
+  .field .hint { font-size: .74rem; color: var(--muted); font-family: var(--font-mono); min-height: 1.1em; padding-left: 4px; }
+  .field .hint.err { color: var(--err); }
+  .field .hint.ok { color: var(--ok); }
+  input[type="text"], input[type="number"], input[type="datetime-local"], select {
+    font: 500 1rem var(--font-mono); color: var(--fg); background: var(--bg); border: 0; border-radius: 16px;
+    padding: 14px 16px; width: 100%; box-shadow: var(--press); outline: none; transition: box-shadow .15s;
+  }
+  input::placeholder { color: var(--muted); opacity: .8; }
+  input:focus-visible, select:focus-visible { box-shadow: var(--press), 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
+  input[type="text"] { text-transform: uppercase; }
+  input[type="file"] { font: 500 .8rem var(--font-ui); color: var(--muted); }
+  .hidden-type { display: none; }
+
+  details { margin-top: 6px; }
+  summary {
+    cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--muted); list-style: none; user-select: none;
+    display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 14px; box-shadow: var(--raise-sm);
+  }
+  summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .2s; }
+  details[open] summary::before { transform: rotate(45deg); }
+  details .fields { margin-top: 16px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
+  button.btn {
+    font: 800 .9rem var(--font-ui); border: 0; border-radius: 16px; padding: 14px 22px; cursor: pointer;
+    background: var(--bg); color: var(--fg); box-shadow: var(--raise-sm); transition: all .15s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  button.btn:hover { box-shadow: var(--raise); }
+  button.btn:active { box-shadow: var(--press); }
+  button.btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 3px; }
+  .btn-primary { background: linear-gradient(145deg, var(--accent), var(--accent-deep)) !important; color: var(--accent-fg) !important;
+    box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light), inset 0 1px 0 rgba(255,255,255,.35) !important; }
+  button.btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: var(--raise-sm); }
+  .toast { font-size: .8rem; color: var(--muted); margin-top: 12px; min-height: 1.2em; padding-left: 4px; }
+
+  .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .seg { display: inline-flex; padding: 5px; border-radius: 14px; box-shadow: var(--press); gap: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); font: 700 .78rem var(--font-ui); padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--raise-sm); }
+  .stage { border-radius: 20px; padding: 20px; background: var(--bg); box-shadow: var(--press); display: flex; justify-content: center; transition: background .25s; }
+  .stage.kraft { background: var(--kraft); background-image: repeating-linear-gradient(90deg, rgba(0,0,0,.025) 0 2px, transparent 2px 6px); }
+  .stage canvas { max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); background: #fff; }
+  .stage.kraft canvas { box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+  .spec { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .spec div { border-radius: 14px; padding: 12px 14px; min-width: 0; box-shadow: var(--raise-sm); }
+  .spec b { display: block; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+  .spec code { font-family: var(--font-mono); font-size: .8rem; word-break: break-all; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="eyebrow">Packaging · Print Image Generator</div>
+      <h1>Master Carton Label</h1>
+      <p id="subtitle">Trade packing · exports at 300 DPI (8 × 4 in)</p>
+    </div>
+    <div class="switch" role="group" aria-label="Label type">
+      <button id="typeTrade" aria-pressed="true"><span class="dot"></span>Trade packing</button>
+      <button id="typeBulk" aria-pressed="false"><span class="dot"></span>Bulk packing</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- ===== Inputs ===== -->
+    <section class="card" aria-label="Inputs">
+      <h2>Inputs</h2>
+      <div class="fields">
+        <div class="field">
+          <label for="pn">Product Number</label>
+          <input id="pn" type="text" value="L0S66AA#JPN" placeholder="e.g. L0S66AA#JPN" autocomplete="off" spellcheck="false">
+          <div class="hint" id="pnHint"></div>
+        </div>
+        <div class="field">
+          <label for="qty">Quantity</label>
+          <input id="qty" type="number" min="1" step="1" value="50" inputmode="numeric">
+          <div class="hint" id="qtyHint"></div>
+        </div>
+        <div class="field" data-type="trade">
+          <label for="itf">ITF-14 Code</label>
+          <input id="itf" type="text" value="10199764212990" placeholder="13 or 14 digits" inputmode="numeric" maxlength="14" autocomplete="off">
+          <div class="hint" id="itfHint"></div>
+        </div>
+        <div class="field hidden-type" data-type="bulk">
+          <label for="sel">Selectivity Number(s)</label>
+          <input id="sel" type="text" value="HP 937" placeholder="e.g. HP 937/938/939" autocomplete="off" spellcheck="false">
+          <div class="hint" id="selHint"></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Advanced (auto-filled)</summary>
+        <div class="fields">
+          <div class="field">
+            <label for="ts">Processing date &amp; time</label>
+            <input id="ts" type="datetime-local" step="1">
+            <div class="hint">Drives the 1S / 1T stamp, DataMatrix and warranty</div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="country">Country of origin</label>
+              <select id="country">
+                <option value="MY" data-name="MALAYSIA">MY · Malaysia</option>
+                <option value="SG" data-name="SINGAPORE">SG · Singapore</option>
+                <option value="CN" data-name="CHINA">CN · China</option>
+                <option value="TH" data-name="THAILAND">TH · Thailand</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="site">Site prefix (DataMatrix)</label>
+              <input id="site" type="text" value="S60" maxlength="6" autocomplete="off">
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="wyears">Warranty (years)</label>
+              <input id="wyears" type="number" min="0" max="10" step="1" value="2">
+            </div>
+          </div>
+          <div class="field" data-type="trade">
+            <label for="logo">Logo (optional PNG/SVG)</label>
+            <input id="logo" type="file" accept="image/*">
+          </div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="btnDownload">Download PNG</button>
+        <button class="btn" id="btnCopy">Copy image</button>
+      </div>
+      <div class="toast" id="toast"></div>
+    </section>
+
+    <!-- ===== Preview ===== -->
+    <section class="card" aria-label="Preview">
+      <div class="preview-head">
+        <h2 style="margin:0">Print image</h2>
+        <div class="seg" role="group" aria-label="Preview background">
+          <button id="bgWhite" aria-pressed="true">Print (white)</button>
+          <button id="bgKraft" aria-pressed="false">On carton</button>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="label" width="2400" height="1200" aria-label="Master carton label preview"></canvas>
+      </div>
+      <div class="spec" id="spec"></div>
+    </section>
+  </div>
+</div>
+
+<!-- bwip-js renders every barcode we need: Code 128, Code 39, Data Matrix, ITF-14 with bearer bars -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bwip-js/4.5.1/bwip-js-min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Element handles ----------
+  const $ = id => document.getElementById(id);
+  const el = {
+    pn: $('pn'), qty: $('qty'), itf: $('itf'), sel: $('sel'), ts: $('ts'), country: $('country'), site: $('site'),
+    wyears: $('wyears'), logo: $('logo'), canvas: $('label'), spec: $('spec'), toast: $('toast'),
+    pnHint: $('pnHint'), qtyHint: $('qtyHint'), itfHint: $('itfHint'), selHint: $('selHint'), subtitle: $('subtitle'),
+    stage: $('stage'), bgWhite: $('bgWhite'), bgKraft: $('bgKraft'), typeTrade: $('typeTrade'), typeBulk: $('typeBulk'),
+    btnDownload: $('btnDownload'), btnCopy: $('btnCopy'),
+  };
+  const ctx = el.canvas.getContext('2d');
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const SERIF = '"Times New Roman", Times, serif';
+  const SANS  = 'Arial, Helvetica, sans-serif';
+
+  // Label types: canvas size at 300 DPI and the line code each one prints by default
+  const TYPES = {
+    trade: { w: 2400, h: 1200, size: '8 × 4 in' },
+    bulk:  { w: 1800, h: 1350, size: '6 × 4.5 in' },
+  };
+  let type = 'trade';
+  let logoImg = null;
+
+  // ---------- Helpers ----------
+  const pad2 = n => String(n).padStart(2, '0');
+
+  function setDefaultTimestamp() {
+    const d = new Date();
+    el.ts.value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+
+  // GS1 mod-10 check digit for a 13-digit ITF-14 body
+  function itfCheckDigit(body13) {
+    let sum = 0;
+    for (let i = 0; i < 13; i++) sum += Number(body13[i]) * (i % 2 === 0 ? 3 : 1);
+    return (10 - (sum % 10)) % 10;
+  }
+
+  // Validate inputs; returns {ok, data, errors}
+  function readInputs() {
+    const errors = {};
+    const pn = el.pn.value.trim().toUpperCase();
+    if (!pn) errors.pn = 'Product number is required';
+    else if (type === 'bulk' && !/^[A-Z0-9]{5}-[A-Z0-9]{5}$/.test(pn)) errors.pn = 'Bulk format: XXXXX-XXXXX (e.g. 4S6W2-60001)';
+    else if (!/^[A-Z0-9#\-]+$/.test(pn)) errors.pn = 'Use letters, digits, # or - only';
+
+    const qty = parseInt(el.qty.value, 10);
+    if (!Number.isInteger(qty) || qty < 1) errors.qty = 'Quantity must be a whole number ≥ 1';
+
+    // Trade only: ITF-14
+    let itf = el.itf.value.replace(/\D/g, '');
+    let itfAdded = false;
+    if (type === 'trade') {
+      if (itf.length === 13) { itf += itfCheckDigit(itf); itfAdded = true; }
+      else if (itf.length === 14) {
+        const want = itfCheckDigit(itf.slice(0, 13));
+        if (Number(itf[13]) !== want) errors.itf = `Check digit should be ${want}`;
+      } else errors.itf = 'Enter 13 or 14 digits';
+    }
+
+    // Bulk only: selectivity number "HP nnn"
+    // Accepts "HP 937", "HP 937/938/939", "HP 937, HP 938" — normalised to "HP 937/938/939"
+    let sel = '', selNums = [];
+    if (type === 'bulk') {
+      const raw = el.sel.value.trim().toUpperCase();
+      if (!raw) errors.sel = 'Selectivity number is required';
+      else {
+        selNums = raw.replace(/HP/g, ' ').split(/[\/,;\s]+/).filter(Boolean);
+        if (!selNums.length || !selNums.every(n => /^\d{2,4}$/.test(n))) errors.sel = 'Format: HP 937 or HP 937/938/939';
+        else sel = 'HP ' + selNums.join('/');
+      }
+    }
+
+    const d = el.ts.value ? new Date(el.ts.value) : new Date();
+    const yy = String(d.getFullYear()).slice(-2), mm = pad2(d.getMonth()+1), dd = pad2(d.getDate());
+    const hh = pad2(d.getHours()), mi = pad2(d.getMinutes()), ss = pad2(d.getSeconds());
+    const stamp = `${yy}${mm}${dd}${hh}${mi}${ss}`;
+
+    const country = el.country.value;
+    const countryName = el.country.selectedOptions[0].dataset.name;
+    const site = (el.site.value.trim().toUpperCase() || 'S60');
+    const wy = Math.max(0, parseInt(el.wyears.value, 10) || 0);
+    const wEnd = new Date(d.getFullYear() + wy, d.getMonth(), 1);
+    const wMon = MONTHS[wEnd.getMonth()], wYear = wEnd.getFullYear();
+
+    // Option code = everything after '#'. Only printed when '#' exists.
+    const hasOption = pn.includes('#');
+    const option = hasOption ? pn.split('#')[1] : '';
+    const prefix = country + site;             // e.g. MYS60
+
+    return {
+      ok: Object.keys(errors).length === 0, errors,
+      data: {
+        pn, qty, itf, itfAdded, sel, selNums, hasOption, option, country, countryName, site, prefix,
+        dateText: `${yy}/${mm}/${dd}`, timeText: `${hh}:${mi}`, stamp,
+        warrantyText: `${wMon} ${wYear}`,
+        warrantyCodeTrade: `7D${pad2(wEnd.getMonth()+1)}${String(wYear).slice(-2)}`,   // 7D1028
+        warrantyCodeBulk: `15D${pad2(wEnd.getMonth()+1)}${wYear}`,                    // 15D012027
+        traceId: `1T${prefix}00${stamp}`,                                              // 1TMYS6000250117113833
+        dm: type === 'trade'
+          ? `${prefix}${stamp};${pn};${qty};${wMon}${wYear};${country}`
+          : `${prefix}${stamp};${pn};${qty};${wMon} ${wYear};${country}`,
+      }
+    };
+  }
+
+  function showHint(node, msg, cls) { node.textContent = msg || ''; node.className = 'hint' + (cls ? ' ' + cls : ''); }
+
+  // ---------- Barcode rendering (bwip-js → offscreen canvas) ----------
+  function barcode(opts) {
+    const c = document.createElement('canvas');
+    bwipjs.toCanvas(c, Object.assign({ scale: 5, includetext: false, paddingwidth: 0, paddingheight: 0 }, opts));
+    return c;
+  }
+
+  // Draw a captioned linear barcode block. Returns its bounding box.
+  //   o.font: caption font; o.hriFont: human-readable font; o.align: 'left' | 'center' caption
+  function drawLinear(x, y, maxW, o) {
+    const bars = barcode({ bcid: o.bcid || 'code128', text: o.text, height: o.height || 14 });
+    const s = Math.min(1, maxW / bars.width);
+    const bw = bars.width * s, bh = bars.height * s;
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'alphabetic';
+    if (o.caption) { ctx.font = o.font; ctx.textAlign = 'left'; ctx.fillText(o.caption, x + (o.captionPad ?? 10), y); }
+    ctx.drawImage(bars, x, y + 14, bw, bh);
+    const hri = o.hri ?? o.text;
+    if (hri) { ctx.font = o.hriFont; ctx.textAlign = 'center'; ctx.fillText(hri, x + bw / 2, y + 14 + bh + (o.hriGap ?? 36)); }
+    return { x, y, w: bw, h: 14 + bh + 40, right: x + bw, bottom: y + 14 + bh + 40 };
+  }
+
+  // ---------- Trade packing layout (mirrors the kraft carton print) ----------
+  function renderTrade(data) {
+    const cap = `600 34px ${SERIF}`, hri = `400 30px ${SERIF}`;
+    if (logoImg) {
+      const box = 200, r = Math.min(box / logoImg.width, box / logoImg.height);
+      ctx.drawImage(logoImg, 70, 50, logoImg.width * r, logoImg.height * r);
+    }
+    const colW = 640, col1 = 220, col2 = 940, col3 = 1620;
+
+    // Row 1
+    const r1 = 250;
+    drawLinear(col1, r1, colW, { caption: '(1P) PRODUCT NUMBER', text: '1P' + data.pn, font: cap, hriFont: hri });
+    drawLinear(col2, r1, 420, { caption: '(Q) QUANTITY', text: 'Q' + data.qty, font: cap, hriFont: hri });
+    const dm = barcode({ bcid: 'datamatrix', text: data.dm, scale: 6 });
+    const dmSize = 220;
+    ctx.drawImage(dm, col3, r1 - 30, dmSize, dmSize);
+    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.font = `500 28px ${SERIF}`;
+    const tx = col3 + dmSize + 26, parts = data.dm.split(';');
+    ctx.fillText(parts[0] + ';', tx, r1 - 10);
+    ctx.fillText(parts[1] + ';' + parts[2] + ';', tx, r1 + 28);
+    ctx.fillText(parts[3] + ';' + parts[4], tx, r1 + 66);
+    ctx.font = `600 30px ${SERIF}`;
+    ctx.fillText('DATE =', tx, r1 + 125);  ctx.fillText(data.dateText, tx + 150, r1 + 125);
+    ctx.fillText('TIME =', tx, r1 + 168);  ctx.fillText(data.timeText, tx + 150, r1 + 168);
+
+    // Row 2 — option only when the product number has '#'
+    const r2 = 560;
+    if (data.hasOption) drawLinear(col1 - 60, r2, colW, { caption: '(30P) OPTION', text: '30P' + data.option, font: cap, hriFont: hri });
+    drawLinear(col2, r2, 460, { caption: 'MADE IN ' + data.countryName, text: '4L' + data.country, font: cap, hriFont: hri });
+    drawLinear(col3, r2, 600, { caption: 'WARRANTY ENDS  ' + data.warrantyText, text: data.warrantyCodeTrade, font: cap, hriFont: hri });
+
+    // Row 3
+    const r3 = 870;
+    drawLinear(col1 - 100, r3, 1100, { caption: '(1S) PROCESSING DATE', text: '1S' + data.stamp, font: cap, hriFont: hri });
+    const itf = barcode({ bcid: 'itf14', text: data.itf, height: 14, scale: 3, showborder: true, borderwidth: 5 });
+    const itfW = 740, itfH = itf.height * (itfW / itf.width);
+    ctx.drawImage(itf, col3 - 120, r3 - 20, itfW, itfH);
+    ctx.font = hri; ctx.textAlign = 'center';
+    const d = data.itf;
+    ctx.fillText(`${d[0]} ${d.slice(1,3)} ${d.slice(3,8)} ${d.slice(8,13)} ${d[13]}`, col3 - 120 + itfW / 2, r3 - 20 + itfH + 38);
+
+    return [
+      ['1P', '1P' + data.pn], ['Q', 'Q' + data.qty],
+      ['30P', data.hasOption ? '30P' + data.option : '— (no #)'],
+      ['4L', '4L' + data.country], ['7D', data.warrantyCodeTrade], ['1S', '1S' + data.stamp],
+      ['ITF-14', data.itf], ['Data Matrix', data.dm],
+    ];
+  }
+
+  // ---------- Bulk packing layout (mirrors the white sticker) ----------
+  function renderBulk(data) {
+    const cap = `700 40px ${SANS}`, hri = `400 30px ${SANS}`;
+    const L = 90;                                   // left margin
+
+    // Header: DATE / TIME + line code · Data Matrix · DM text
+    ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.font = `700 44px ${SANS}`;
+    ctx.fillText('DATE = ' + data.dateText, L, 150);
+    ctx.fillText('TIME = ' + data.timeText, L, 230);
+    const dm = barcode({ bcid: 'datamatrix', text: data.dm, scale: 6 });
+    ctx.drawImage(dm, 800, 80, 210, 210);
+    ctx.font = `700 32px ${SANS}`;
+    const tx = 1140, parts = data.dm.split(';');
+    ctx.fillText(parts[0] + ';', tx, 130);
+    ctx.fillText(parts[1] + ';' + parts[2] + ';', tx, 185);
+    ctx.fillText(parts[3] + ';' + parts[4], tx, 240);
+
+    // (1T) Traceability ID with selectivity number at its right
+    const r1 = 390;
+    const t = drawLinear(L, r1, 1150, { caption: '(1T) TRACEABILITY ID', text: data.traceId, font: cap, hriFont: hri, height: 16 });
+    // Selectivity numbers: three per line so a long list wraps instead of running off the label
+    ctx.font = `700 54px ${SANS}`; ctx.textAlign = 'left'; ctx.fillStyle = '#000';
+    const lines = [];
+    for (let i = 0; i < data.selNums.length; i += 3) lines.push((i === 0 ? 'HP ' : '') + data.selNums.slice(i, i + 3).join('/'));
+    const y0 = r1 + 110 - (lines.length - 1) * 31;
+    lines.forEach((ln, i) => ctx.fillText(ln, t.right + 60, y0 + i * 62));
+
+    // (1P) Part number · (Q) Quantity (Code 39, shown with its *start/stop* in the HRI) + big quantity
+    const r2 = 720;
+    drawLinear(L, r2, 760, { caption: '(1P) PART NUMBER', text: '1P' + data.pn, font: cap, hriFont: hri, height: 16 });
+    const q = drawLinear(920, r2, 460, { caption: '(Q) QUANTITY', bcid: 'code39', text: 'Q' + data.qty, hri: `*Q${data.qty}*`, font: cap, hriFont: hri, height: 16 });
+    ctx.font = `700 54px ${SANS}`; ctx.textAlign = 'left';
+    ctx.fillText(String(data.qty), q.right + 50, r2 + 100);
+
+    // Warranty · Made in
+    const r3 = 1040;
+    drawLinear(L, r3, 880, { caption: 'WARRANTY ENDS ' + data.warrantyText, text: data.warrantyCodeBulk, font: cap, hriFont: hri, height: 16 });
+    drawLinear(1050, r3, 520, { caption: 'MADE IN ' + data.countryName, text: '4L' + data.country, font: cap, hriFont: hri, height: 16 });
+
+    return [
+      ['1T', data.traceId], ['Selectivity', data.sel], ['1P', '1P' + data.pn], ['Q (Code 39)', 'Q' + data.qty],
+      ['15D', data.warrantyCodeBulk], ['4L', '4L' + data.country], ['Data Matrix', data.dm],
+    ];
+  }
+
+  // ---------- Main render ----------
+  function render() {
+    const { ok, errors, data } = readInputs();
+    showHint(el.pnHint, errors.pn || (type === 'trade' ? (data.hasOption ? `Option code → ${data.option}` : 'No "#" → option line hidden') : ''), errors.pn ? 'err' : 'ok');
+    showHint(el.qtyHint, errors.qty || '', errors.qty ? 'err' : '');
+    showHint(el.itfHint, errors.itf || (data.itfAdded ? `Check digit added → ${data.itf}` : 'Check digit OK'), errors.itf ? 'err' : 'ok');
+    showHint(el.selHint, errors.sel || (type === 'bulk' ? `Printed as ${data.sel}` : ''), errors.sel ? 'err' : 'ok');
+    el.btnDownload.disabled = el.btnCopy.disabled = !ok;
+
+    const W = el.canvas.width, H = el.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    if (!ok) {
+      ctx.fillStyle = '#999'; ctx.font = `600 48px ${SANS}`; ctx.textAlign = 'center';
+      ctx.fillText('Fix the highlighted fields to generate the label', W / 2, H / 2);
+      el.spec.innerHTML = ''; return;
+    }
+    const rows = type === 'trade' ? renderTrade(data) : renderBulk(data);
+    el.spec.innerHTML = rows.map(([k, v]) => `<div><b>${k}</b><code>${v}</code></div>`).join('');
+  }
+
+  // ---------- Label type switch ----------
+  function setType(next) {
+    type = next;
+    el.typeTrade.setAttribute('aria-pressed', String(next === 'trade'));
+    el.typeBulk.setAttribute('aria-pressed', String(next === 'bulk'));
+    document.querySelectorAll('[data-type]').forEach(n => n.classList.toggle('hidden-type', n.dataset.type !== next));
+    el.canvas.width = TYPES[next].w; el.canvas.height = TYPES[next].h;
+    el.pn.placeholder = next === 'bulk' ? 'XXXXX-XXXXX (e.g. 4S6W2-60001)' : 'e.g. L0S66AA#JPN';
+    // Swap the example value when the current one doesn't fit the new format
+    if (next === 'bulk' && !/^[A-Z0-9]{5}-[A-Z0-9]{5}$/i.test(el.pn.value)) el.pn.value = '4S6W2-60001';
+    if (next === 'trade' && /^[A-Z0-9]{5}-[A-Z0-9]{5}$/i.test(el.pn.value)) el.pn.value = 'L0S66AA#JPN';
+    el.subtitle.textContent = `${next === 'trade' ? 'Trade' : 'Bulk'} packing · exports at 300 DPI (${TYPES[next].size})`;
+    render();
+  }
+  el.typeTrade.addEventListener('click', () => setType('trade'));
+  el.typeBulk.addEventListener('click', () => setType('bulk'));
+
+  // ---------- Export ----------
+  function toast(msg) { el.toast.textContent = msg; setTimeout(() => { if (el.toast.textContent === msg) el.toast.textContent = ''; }, 3500); }
+
+  function fileName() {
+    const { data } = readInputs();
+    return `${type === 'trade' ? 'Trade' : 'Bulk'}Carton_${data.pn.replace('#', '-')}_Q${data.qty}_${data.stamp}.png`;
+  }
+
+  el.btnDownload.addEventListener('click', () => {
+    el.canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = fileName(); a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Saved ' + a.download);
+    }, 'image/png');
+  });
+
+  el.btnCopy.addEventListener('click', async () => {
+    try {
+      const blob = await new Promise(res => el.canvas.toBlob(res, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast('Image copied — paste it into your label software');
+    } catch (e) {
+      toast('Copy not supported in this browser. Use Download PNG instead.');
+    }
+  });
+
+  el.logo.addEventListener('change', () => {
+    const f = el.logo.files[0];
+    if (!f) { logoImg = null; render(); return; }
+    const img = new Image();
+    img.onload = () => { logoImg = img; render(); };
+    img.src = URL.createObjectURL(f);
+  });
+
+  // Preview background toggle
+  function setBg(kraft) {
+    el.stage.classList.toggle('kraft', kraft);
+    el.bgWhite.setAttribute('aria-pressed', String(!kraft));
+    el.bgKraft.setAttribute('aria-pressed', String(kraft));
+  }
+  el.bgWhite.addEventListener('click', () => setBg(false));
+  el.bgKraft.addEventListener('click', () => setBg(true));
+
+  // Live update
+  let t;
+  for (const n of [el.pn, el.qty, el.itf, el.sel, el.ts, el.country, el.site, el.wyears]) {
+    n.addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 120); });
+  }
+
+  setDefaultTimestamp();
+  document.fonts ? document.fonts.ready.then(render) : render();
+})();
+</script>
+</body>
+</html>
