@@ -43,6 +43,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; }
   body {
     font-family: var(--font-ui); color: var(--fg); background: var(--bg); min-height: 100vh;
@@ -84,7 +85,7 @@
     font: 500 1rem var(--font-mono); color: var(--fg); background: var(--bg); border: 0; border-radius: 16px;
     padding: 14px 16px; width: 100%; box-shadow: var(--press); outline: none; transition: box-shadow .15s;
   }
-  input::placeholder { color: var(--muted); opacity: .8; }
+  input::placeholder { color: var(--muted); opacity: .8; text-transform: none; }
   input:focus-visible, select:focus-visible { box-shadow: var(--press), 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
   input[type="text"] { text-transform: uppercase; }
   input[type="file"] { font: 500 .8rem var(--font-ui); color: var(--muted); }
@@ -120,8 +121,13 @@
   .seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--raise-sm); }
   .stage { border-radius: 20px; padding: 20px; background: var(--bg); box-shadow: var(--press); display: flex; justify-content: center; transition: background .25s; }
   .stage.kraft { background: var(--kraft); background-image: repeating-linear-gradient(90deg, rgba(0,0,0,.025) 0 2px, transparent 2px 6px); }
-  .stage canvas { max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); background: #fff; }
+  .stage canvas { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); background: #fff; }
   .stage.kraft canvas { box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 320px; width: 100%; color: var(--muted); text-align: center; }
+  .empty p { margin: 0; font-size: .95rem; font-weight: 600; }
+  .empty-icon { width: 120px; height: 60px; border-radius: 10px; box-shadow: var(--raise-sm);
+    background: repeating-linear-gradient(90deg, var(--muted) 0 3px, transparent 3px 7px, var(--muted) 7px 9px, transparent 9px 15px);
+    background-size: 70% 60%; background-repeat: no-repeat; background-position: center; opacity: .55; }
 
   .spec { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
   .spec div { border-radius: 14px; padding: 12px 14px; min-width: 0; box-shadow: var(--raise-sm); }
@@ -153,22 +159,22 @@
       <div class="fields">
         <div class="field">
           <label for="pn">Product Number</label>
-          <input id="pn" type="text" value="L0S66AA#JPN" placeholder="e.g. L0S66AA#JPN" autocomplete="off" spellcheck="false">
+          <input id="pn" type="text" value="" placeholder="e.g. L0S66AA#JPN" autocomplete="off" spellcheck="false">
           <div class="hint" id="pnHint"></div>
         </div>
         <div class="field">
           <label for="qty">Quantity</label>
-          <input id="qty" type="number" min="1" step="1" value="50" inputmode="numeric">
+          <input id="qty" type="number" min="1" step="1" value="" placeholder="e.g. 50" inputmode="numeric">
           <div class="hint" id="qtyHint"></div>
         </div>
         <div class="field" data-type="trade">
           <label for="itf">ITF-14 Code</label>
-          <input id="itf" type="text" value="10199764212990" placeholder="13 or 14 digits" inputmode="numeric" maxlength="14" autocomplete="off">
+          <input id="itf" type="text" value="" placeholder="13 or 14 digits" inputmode="numeric" maxlength="14" autocomplete="off">
           <div class="hint" id="itfHint"></div>
         </div>
         <div class="field hidden-type" data-type="bulk">
           <label for="sel">Selectivity Number(s)</label>
-          <input id="sel" type="text" value="HP 937" placeholder="e.g. HP 937/938/939" autocomplete="off" spellcheck="false">
+          <input id="sel" type="text" value="" placeholder="e.g. HP 937/938/939" autocomplete="off" spellcheck="false">
           <div class="hint" id="selHint"></div>
         </div>
       </div>
@@ -221,7 +227,11 @@
         </div>
       </div>
       <div class="stage" id="stage">
-        <canvas id="label" width="2400" height="1200" aria-label="Master carton label preview"></canvas>
+        <canvas id="label" width="2400" height="1200" aria-label="Master carton label preview" hidden></canvas>
+        <div class="empty" id="empty">
+          <div class="empty-icon" aria-hidden="true"></div>
+          <p>Fill in the fields to generate the print image.</p>
+        </div>
       </div>
       <div class="spec" id="spec"></div>
     </section>
@@ -240,7 +250,7 @@
     pn: $('pn'), qty: $('qty'), itf: $('itf'), sel: $('sel'), ts: $('ts'), country: $('country'),
     wmonths: $('wmonths'), wHint: $('wHint'), logo: $('logo'), canvas: $('label'), spec: $('spec'), toast: $('toast'),
     pnHint: $('pnHint'), qtyHint: $('qtyHint'), itfHint: $('itfHint'), selHint: $('selHint'), subtitle: $('subtitle'),
-    stage: $('stage'), bgWhite: $('bgWhite'), bgKraft: $('bgKraft'), typeTrade: $('typeTrade'), typeBulk: $('typeBulk'), typeHost: $('typeHost'),
+    stage: $('stage'), empty: $('empty'), bgWhite: $('bgWhite'), bgKraft: $('bgKraft'), typeTrade: $('typeTrade'), typeBulk: $('typeBulk'), typeHost: $('typeHost'),
     btnDownload: $('btnDownload'), btnCopy: $('btnCopy'),
   };
   const ctx = el.canvas.getContext('2d');
@@ -251,9 +261,9 @@
   // Label types: canvas size at 300 DPI, the site prefix encoded in DataMatrix / 1T,
   // and the product-number rule each type enforces
   const TYPES = {
-    trade: { name: 'Trade', w: 2400, h: 1200, size: '8 × 4 in',   site: 'S60', pnRe: /^[A-Z0-9#\-]+$/,            pnMsg: 'Use letters, digits, # or - only',           example: 'L0S66AA#JPN', ph: 'e.g. L0S66AA#JPN' },
-    bulk:  { name: 'Bulk',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'S60', pnRe: /^[A-Z0-9]{5}-[A-Z0-9]{5}$/, pnMsg: 'Bulk format: XXXXX-XXXXX (e.g. 4S6W2-60001)', example: '4S6W2-60001', ph: 'XXXXX-XXXXX (e.g. 4S6W2-60001)' },
-    host:  { name: 'Host',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'K80', pnRe: /^[A-Z0-9]{4}-[A-Z0-9]{4}$/, pnMsg: 'Host format: XXXX-XXXX (e.g. 5060-8897)',     example: '5060-8897',   ph: 'XXXX-XXXX (e.g. 5060-8897)' },
+    trade: { name: 'Trade', w: 2400, h: 1200, size: '8 × 4 in',   site: 'S60', pnRe: /^[A-Z0-9\-]+(#[A-Z0-9]+)?$/, pnMsg: 'Use letters, digits, - and an optional #OPTION (e.g. L0S66AA#JPN)', ph: 'e.g. L0S66AA#JPN' },
+    bulk:  { name: 'Bulk',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'S60', pnRe: /^[A-Z0-9]{5}-[A-Z0-9]{5}$/, pnMsg: 'Bulk format: XXXXX-XXXXX (e.g. 4S6W2-60001)', ph: 'XXXXX-XXXXX (e.g. 4S6W2-60001)' },
+    host:  { name: 'Host',  w: 1800, h: 1350, size: '6 × 4.5 in', site: 'K80', pnRe: /^[A-Z0-9]{4}-[A-Z0-9]{4}$/, pnMsg: 'Host format: XXXX-XXXX (e.g. 5060-8897)',     ph: 'XXXX-XXXX (e.g. 5060-8897)' },
   };
   let type = 'trade';
   let logoImg = null;
@@ -277,11 +287,12 @@
   function readInputs() {
     const errors = {};
     const pn = el.pn.value.trim().toUpperCase();
-    if (!pn) errors.pn = 'Product number is required';
+    if (!pn) errors.pn = '';
     else if (!TYPES[type].pnRe.test(pn)) errors.pn = TYPES[type].pnMsg;
 
     const qty = parseInt(el.qty.value, 10);
-    if (!Number.isInteger(qty) || qty < 1) errors.qty = 'Quantity must be a whole number ≥ 1';
+    if (el.qty.value.trim() === '') errors.qty = '';
+    else if (!Number.isInteger(qty) || qty < 1) errors.qty = 'Quantity must be a whole number ≥ 1';
 
     // Trade only: ITF-14
     let itf = el.itf.value.replace(/\D/g, '');
@@ -291,7 +302,7 @@
       else if (itf.length === 14) {
         const want = itfCheckDigit(itf.slice(0, 13));
         if (Number(itf[13]) !== want) errors.itf = `Check digit should be ${want}`;
-      } else errors.itf = 'Enter 13 or 14 digits';
+      } else errors.itf = itf.length ? 'Enter 13 or 14 digits' : '';
     }
 
     // Bulk only: selectivity number "HP nnn"
@@ -299,7 +310,7 @@
     let sel = '', selNums = [];
     if (type === 'bulk') {
       const raw = el.sel.value.trim().toUpperCase();
-      if (!raw) errors.sel = 'Selectivity number is required';
+      if (!raw) errors.sel = '';
       else {
         selNums = raw.replace(/HP/g, ' ').split(/[\/,;\s]+/).filter(Boolean);
         if (!selNums.length || !selNums.every(n => /^\d{2,4}$/.test(n))) errors.sel = 'Format: HP 937 or HP 937/938/939';
@@ -319,22 +330,24 @@
     const wEnd = new Date(d.getFullYear(), d.getMonth() + wm, 1);   // JS rolls extra months into the year
     const wMon = MONTHS[wEnd.getMonth()], wYear = wEnd.getFullYear();
 
-    // Option code = everything after '#'. Only printed when '#' exists.
-    const hasOption = pn.includes('#');
+    // Trade: "L0S66AA#JPN" → product number L0S66AA printed bare, option JPN printed in the (30P) block.
+    const pnFull = pn;
+    const hasOption = type === 'trade' && pn.includes('#');
     const option = hasOption ? pn.split('#')[1] : '';
+    const pnBase = hasOption ? pn.split('#')[0] : pn;
     const prefix = country + site;             // e.g. MYS60
 
     return {
       ok: Object.keys(errors).length === 0, errors,
       data: {
-        pn, qty, itf, itfAdded, sel, selNums, hasOption, option, country, countryName, site, prefix, wm,
+        pn: pnBase, pnFull, qty, itf, itfAdded, sel, selNums, hasOption, option, country, countryName, site, prefix, wm,
         dateText: `${yy}/${mm}/${dd}`, timeText: `${hh}:${mi}`, stamp,
         warrantyText: `${wMon} ${wYear}`,
         warrantyCodeTrade: `7D${pad2(wEnd.getMonth()+1)}${String(wYear).slice(-2)}`,   // 7D1028
         warrantyCodeBulk: `15D${pad2(wEnd.getMonth()+1)}${wYear}`,                    // 15D012027 (bulk + host)
         traceId: `1T${prefix}00${stamp}`,                                              // 1TMYS6000250117113833 / 1TMYK8000260617155551
         dm: type === 'trade'
-          ? `${prefix}${stamp};${pn};${qty};${wMon}${wYear};${country}`
+          ? `${prefix}${stamp};${pnBase};${qty};${wMon}${wYear};${country}`
           : `${prefix}${stamp};${pn};${qty};${wMon} ${wYear};${country}`,
       }
     };
@@ -388,7 +401,7 @@
     ctx.fillText('DATE =', tx, r1 + 125);  ctx.fillText(data.dateText, tx + 150, r1 + 125);
     ctx.fillText('TIME =', tx, r1 + 168);  ctx.fillText(data.timeText, tx + 150, r1 + 168);
 
-    // Row 2 — option only when the product number has '#'
+    // Row 2 — option only when an option code was entered
     const r2 = 560;
     if (data.hasOption) drawLinear(col1 - 60, r2, colW, { caption: '(30P) OPTION', text: '30P' + data.option, font: cap, hriFont: hri });
     drawLinear(col2, r2, 460, { caption: 'MADE IN ' + data.countryName, text: '4L' + data.country, font: cap, hriFont: hri });
@@ -406,7 +419,7 @@
 
     return [
       ['1P', '1P' + data.pn], ['Q', 'Q' + data.qty],
-      ['30P', data.hasOption ? '30P' + data.option : '— (no #)'],
+      ['30P', data.hasOption ? '30P' + data.option : '— (none)'],
       ['4L', '4L' + data.country], ['7D', data.warrantyCodeTrade], ['1S', '1S' + data.stamp],
       ['ITF-14', data.itf], ['Data Matrix', data.dm],
     ];
@@ -463,21 +476,18 @@
   // ---------- Main render ----------
   function render() {
     const { ok, errors, data } = readInputs();
-    showHint(el.pnHint, errors.pn || (type === 'trade' ? (data.hasOption ? `Option code → ${data.option}` : 'No "#" → option line hidden') : ''), errors.pn ? 'err' : 'ok');
+    showHint(el.pnHint, errors.pn || (type === 'trade' ? (data.hasOption ? `Prints 1P${data.pn} + (30P) OPTION 30P${data.option}` : (data.pn ? 'No # → (30P) OPTION line hidden' : '')) : ''), errors.pn ? 'err' : 'ok');
     showHint(el.qtyHint, errors.qty || '', errors.qty ? 'err' : '');
-    showHint(el.itfHint, errors.itf || (data.itfAdded ? `Check digit added → ${data.itf}` : 'Check digit OK'), errors.itf ? 'err' : 'ok');
-    showHint(el.selHint, errors.sel || (type === 'bulk' ? `Printed as ${data.sel}` : ''), errors.sel ? 'err' : 'ok');
+    showHint(el.itfHint, errors.itf || (!data.itf ? '' : data.itfAdded ? `Check digit added → ${data.itf}` : 'Check digit OK'), errors.itf ? 'err' : 'ok');
+    showHint(el.selHint, errors.sel || (type === 'bulk' && data.sel ? `Printed as ${data.sel}` : ''), errors.sel ? 'err' : 'ok');
     showHint(el.wHint, `Ends ${data.warrantyText} (${data.wm} months)`, 'ok');
     el.btnDownload.disabled = el.btnCopy.disabled = !ok;
 
     const W = el.canvas.width, H = el.canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    if (!ok) {
-      ctx.fillStyle = '#999'; ctx.font = `600 48px ${SANS}`; ctx.textAlign = 'center';
-      ctx.fillText('Fix the highlighted fields to generate the label', W / 2, H / 2);
-      el.spec.innerHTML = ''; return;
-    }
+    el.canvas.hidden = !ok; el.empty.hidden = ok;
+    if (!ok) { el.spec.innerHTML = ''; return; }
     const rows = type === 'trade' ? renderTrade(data) : renderBulk(data);
     el.spec.innerHTML = rows.map(([k, v]) => `<div><b>${k}</b><code>${v}</code></div>`).join('');
   }
@@ -490,8 +500,8 @@
     const T = TYPES[next];
     el.canvas.width = T.w; el.canvas.height = T.h;
     el.pn.placeholder = T.ph;
-    // Swap in the example value when the current one doesn't fit the new format
-    if (!T.pnRe.test(el.pn.value.trim().toUpperCase())) el.pn.value = T.example;
+    // Each label type starts clean
+    el.pn.value = ''; el.qty.value = ''; el.itf.value = ''; el.sel.value = '';
     el.subtitle.textContent = `${T.name} packing · exports at 300 DPI (${T.size})`;
     render();
   }
@@ -504,7 +514,7 @@
 
   function fileName() {
     const { data } = readInputs();
-    return `${TYPES[type].name}Carton_${data.pn.replace('#', '-')}_Q${data.qty}_${data.stamp}.png`;
+    return `${TYPES[type].name}Carton_${data.pn}${data.hasOption ? '-' + data.option : ''}_Q${data.qty}_${data.stamp}.png`;
   }
 
   el.btnDownload.addEventListener('click', () => {
